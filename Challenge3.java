@@ -9,28 +9,27 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.Exception;
 import java.io.StringReader;
-import java.util.Scanner;
-import java.util.Stack;
+import java.lang.Byte;
 
 public class Challenge3 {
 
 	private Boolean debug = true;
 	private Boolean bigEndian = false;
-    private FileInputStream input;
-    private int currentOffset;
-    private Stack<Integer> offsetStack;
     private String filename;
+
+    private int latRef = 1;
+    private int longRef = 1;
+    private double latitude = 0;
+    private double longitude = 0;
 
     /*
     * Constructor
     */
     Challenge3() throws Exception{
         try{
-            currentOffset = 0;
-            offsetStack = new Stack<Integer>();
             filename = "challenge03.bin";
-            input = new FileInputStream(filename);
-            parseBin();
+            FileInputStream input = new FileInputStream(filename);
+            parseBin(input);
             input.close();
         }
         catch (IOException e) {
@@ -65,9 +64,8 @@ public class Challenge3 {
     * nextByte
     * returns the value of the next byte from the binary file and increments the currentOffset by one
     */
-    int nextByte(){
+    int nextByte(FileInputStream input){
         try{
-            currentOffset++;
             return input.read();
         }
         catch (IOException e) {
@@ -81,10 +79,9 @@ public class Challenge3 {
     * skip
     * skips the indicated number of bytes in the file and increments the currentOffset accordingly
     */
-    void skip(int skipAmount, FileInputStream is){
+    void skip(int skipAmount, FileInputStream input){
         try{
-            is.skip(skipAmount);
-            currentOffset += skipAmount;
+            input.skip(skipAmount);
         }
         catch (IOException e) {
             System.out.println("I/O Problem!");
@@ -96,9 +93,9 @@ public class Challenge3 {
     * parseFileHeader
     * Parses the file header of the binary file
     */
-    int parseFileHeader() throws Exception{
-        int b1 = nextByte();
-        int b2 = nextByte();
+    int parseFileHeader(FileInputStream input) throws Exception{
+        int b1 = nextByte(input);
+        int b2 = nextByte(input);
 
 		//Bytes 0-1 - Check endianness 
         if(b1 == 0x4d && b2 == 0x4d){
@@ -110,8 +107,8 @@ public class Challenge3 {
         }
 
     	//Bytes 2-3 - Make sure file is a TIFF file
-        b1 = nextByte();
-        b2 = nextByte();
+        b1 = nextByte(input);
+        b2 = nextByte(input);
         if(debug){
             System.out.println("TIFF? "+(getValue(b1, b2) == 42));
         }
@@ -120,10 +117,10 @@ public class Challenge3 {
         }
 
     	//Bytes 4-7 - Find offset of first IFD
-        b1 = nextByte();
-        b2 = nextByte();
-        int b3 = nextByte();
-        int b4 = nextByte();
+        b1 = nextByte(input);
+        b2 = nextByte(input);
+        int b3 = nextByte(input);
+        int b4 = nextByte(input);
         int offset = getValue(b1, b2, b3, b4);
 
         if(debug){
@@ -137,31 +134,31 @@ public class Challenge3 {
     * parseIFE
     * Parses and ImageFileEntry
     */
-    int parseIFE(){
+    int parseIFE(FileInputStream ifeInput){
 	    //Bytes 2-3 - field Type
-        int b1 = nextByte();
-        int b2 = nextByte();
+        int b1 = nextByte(ifeInput);
+        int b2 = nextByte(ifeInput);
         int fieldType = getValue(b1, b2);
         if(debug){
             System.out.println("Field type: "+Integer.toHexString(fieldType));
         }
-    	//Bytes 4-7 - number of values, currentOffset of specified Type
-        b1 = nextByte();
-        b2 = nextByte();
-        int b3 = nextByte();
-        int b4 = nextByte();
+    	//Bytes 4-7 - number of values, Count of specified Type
+        b1 = nextByte(ifeInput);
+        b2 = nextByte(ifeInput);
+        int b3 = nextByte(ifeInput);
+        int b4 = nextByte(ifeInput);
 
-        int currentOffset = getValue(b1, b2, b3, b4);
+        int count = getValue(b1, b2, b3, b4);
 
         if(debug){
-            System.out.println("currentOffset: "+Integer.toHexString(currentOffset));
+            System.out.println("Count: "+Integer.toHexString(count));
         }
 
         //Bytes 8-11 - value offset (in bytes) of the Value for the field
-        b1 = nextByte();
-        b2 = nextByte();
-        b3 = nextByte();
-        b4 = nextByte();
+        b1 = nextByte(ifeInput);
+        b2 = nextByte(ifeInput);
+        b3 = nextByte(ifeInput);
+        b4 = nextByte(ifeInput);
         int valueOffset = getValue(b1, b2, b3, b4);
 
         if(debug){
@@ -171,65 +168,118 @@ public class Challenge3 {
         return valueOffset;
     }
 
-    void parseGpsLatitudeRef(int valueOffset){
+    double parseGpsLatLong(int valueOffset){
         try{
-            FileInputStream is = new FileInputStream(filename);
-            //skip to offset of GPS Latitude Ref
-            skip(valueOffset-currentOffset, is);
-            int b1 = nextByte();
-            System.out.println("Latitude Ref: "+b1);
-            is.close();
+        FileInputStream latLongInput = new FileInputStream(filename);
+            //skip to offset of GPS Latitude/Longitude
+            skip(valueOffset, latLongInput);
+
+            float[] dms = new float[3];
+
+            for(int i=0; i<3; i++){
+                int[] numeratorValues = {nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput)};
+                float numerator = (float)getValue(numeratorValues[0], numeratorValues[1], numeratorValues[2], numeratorValues[3]);
+
+                int[] denominatorValues = {nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput)};
+                float denominator = (float)getValue(denominatorValues[0], denominatorValues[1], denominatorValues[2], denominatorValues[3]);
+
+                dms[i] = numerator/denominator;
+            }
+
+            if(debug){
+                System.out.print("Degrees/Minutes/Seconds: ");
+                for(int j=0; j<3; j++){
+                    System.out.print(dms[j]+" ");
+                }
+                System.out.println();
+            }
+
+            latLongInput.close();
+
+            return dms[0] + dms[1]/60.0 + dms[2]/3600.0;
         }
         catch (IOException e) {
             System.out.println("I/O Problem!");
             e.printStackTrace();
         }
+
+        return -1;
+    }
+
+    /*
+    * parseGpsLatLongRef
+    * Parses the 7-bit, null-terminated ASCII value corresponding to a Latitude or Longitude Ref
+    */
+    int parseGpsLatLongRef(int valueOffset){
+        try{
+            FileInputStream latLongRefInput = new FileInputStream(filename);
+            //skip to offset of GPS Latitude/Longitude Ref
+            skip(valueOffset, latLongRefInput);
+            int b1 = nextByte(latLongRefInput);
+            System.out.println("Latitude/Longitude Ref: "+(Integer.toBinaryString(b1)));
+            System.out.println("N: "+Integer.toBinaryString('N'));
+            System.out.println("W: "+Integer.toBinaryString('W'));
+            latLongRefInput.close();
+            return 1;
+        }
+        catch (IOException e) {
+            System.out.println("I/O Problem!");
+            e.printStackTrace();
+        }
+        return 0;
     }
 
     /*
     * tagOfInterest
     * checks to see if the tag contains GPS information; if so, calls parseIFE() and return true
     */
-    boolean tagOfInterest(int tag){
+    boolean tagOfInterest(int tag, int offset, FileInputStream tagInput){
         int valueOffset;
     	switch(tag){
     		case 0x0001: 
 				if(debug){
     				System.out.println("Gps Latitude Ref");
     			}
-                valueOffset = parseIFE(); //GpsLatitudeRef
-                //parseGpsLatitudeRef(valueOffset);
+                valueOffset = parseIFE(tagInput); //GpsLatitudeRef
+                latRef = parseGpsLatLongRef(valueOffset);
     			return true;
 
    			case 0x0002: 
    				if(debug){
     				System.out.println("Gps Latitude");
     			}
-   				parseIFE(); //GpsLatitude
+   				valueOffset = parseIFE(tagInput); //GpsLatitude
+                latitude = latRef*parseGpsLatLong(valueOffset);
+                if(debug){
+                    System.out.println("Latitude: "+latitude);
+                }
     			return true;
 
     		case 0x0003: 
     			if(debug){
     				System.out.println("Gps Longitude Ref");
     			}
-    			parseIFE(); //GpsLongitudeRef
+    			valueOffset = parseIFE(tagInput); //GpsLongitudeRef
+                longRef = parseGpsLatLongRef(valueOffset);
     			return true;
 
     		case 0x0004: 
     			if(debug){
     				System.out.println("Gps Longitude");
     			}
-    			parseIFE(); //GpsLongitude
+    			valueOffset = parseIFE(tagInput); //GpsLongitude
+                longitude = longRef*parseGpsLatLong(valueOffset);
+                if(debug){
+                    System.out.println("Longitude: "+longitude);
+                }
     			return true;
 
    			case 0x8825: 
    				if(debug){
     				System.out.println("Gps IFD");
     			}
-   				valueOffset = parseIFE(); //GpsIFD
-                offsetStack.push(currentOffset);
+   				valueOffset = parseIFE(tagInput); //GpsIFD
                 parseIFD(valueOffset);
-                currentOffset = offsetStack.pop();
     			return true;
 
    			default:
@@ -242,44 +292,54 @@ public class Challenge3 {
      * Parses an ImageFileDirectory in the file
      */
     void parseIFD(int ifdOffset){
-    	//skip to offset of 0th IFD
-        skip(ifdOffset-currentOffset, input);
+        try{
+            FileInputStream ifdInput = new FileInputStream(filename);
+        	//skip to offset of 0th IFD
+            skip(ifdOffset, ifdInput);
 
-        if(debug){
-            System.out.println("ifdOffset-currentOffset: "+(ifdOffset-currentOffset));
-        }
+            if(debug){
+                System.out.println("ifdOffset: "+(ifdOffset));
+            }
 
-    	//find number of directory entries
-        int b1 = nextByte();
-        int b2 = nextByte();
-        int numEntries = getValue(b1, b2);
-        if(debug){
-            //System.out.println("b1: "+b1+"\nb2: "+b2);
-            System.out.println("Num entries: "+numEntries);
-        }
-
-		//for each entry
-        for(int i=0; i<numEntries; i++){
-			//find tag
-            b1 = nextByte();
-            b2 = nextByte();
-            int tag = getValue(b1, b2);
+        	//find number of directory entries
+            int b1 = nextByte(ifdInput);
+            int b2 = nextByte(ifdInput);
+            ifdOffset += 2;
+            int numEntries = getValue(b1, b2);
             if(debug){
                 //System.out.println("b1: "+b1+"\nb2: "+b2);
-               System.out.println("Tag: "+Integer.toHexString(tag));
+                System.out.println("Num entries: "+numEntries);
             }
-            if(!tagOfInterest(tag)){
-               skip(10, input);
+
+    		//for each entry
+            for(int i=0; i<numEntries; i++){
+    			//find tag
+                b1 = nextByte(ifdInput);
+                b2 = nextByte(ifdInput);
+                ifdOffset += 2;
+                int tag = getValue(b1, b2);
+                if(debug){
+                    //System.out.println("b1: "+b1+"\nb2: "+b2);
+                   System.out.println("Tag: "+Integer.toHexString(tag));
+                }
+                if(!tagOfInterest(tag, ifdOffset, ifdInput)){
+                   skip(10, ifdInput);
+                }
             }
-       }
+            ifdInput.close();
+        }
+        catch (IOException e) {
+            System.out.println("I/O Problem!");
+            e.printStackTrace();
+        }
     }
 
 	/*
 	 * parseBin
      * Parses the bin file
      */
-	void parseBin() throws Exception{
-		int ifdOffset = parseFileHeader();
+	void parseBin(FileInputStream input) throws Exception{
+		int ifdOffset = parseFileHeader(input);
 		parseIFD(ifdOffset);
 	}
 
