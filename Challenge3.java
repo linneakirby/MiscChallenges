@@ -165,6 +165,7 @@ public class Challenge3 {
         int valueOffset = getValue(b1, b2, b3, b4);
 
         if(debug){
+            System.out.println("b1: "+b1+"\nb2: "+b2+"\nb3: "+b3+"\nb4: "+b4);
             System.out.println("Value offset: "+Integer.toHexString(valueOffset));
         }
 
@@ -213,23 +214,16 @@ public class Challenge3 {
     * parseGpsLatLongRef
     * Parses the 7-bit, null-terminated ASCII value corresponding to a Latitude or Longitude Ref
     */
-    int parseGpsLatLongRef(int valueOffset){
-        try{
-            FileInputStream latLongRefInput = new FileInputStream(filename);
-            //skip to offset of GPS Latitude/Longitude Ref
-            skip(valueOffset, latLongRefInput);
-            int b1 = nextByte(latLongRefInput);
-            System.out.println("Latitude/Longitude Ref: "+(Integer.toBinaryString(b1)));
-            System.out.println("N: "+Integer.toBinaryString('N'));
-            System.out.println("W: "+Integer.toBinaryString('W'));
-            latLongRefInput.close();
+    int parseGpsLatLongRef(int value){
+        value = value >>> 24;
+        if(debug){
+            System.out.println("Latitude/Longitude Ref: "+((char)value));
+        }
+
+        if(value == 'N' || value == 'E'){
             return 1;
         }
-        catch (IOException e) {
-            System.out.println("I/O Problem!");
-            e.printStackTrace();
-        }
-        return 0;
+        return -1;
     }
 
     /*
@@ -237,22 +231,22 @@ public class Challenge3 {
     * checks to see if the tag contains GPS information; if so, calls parseIFE() and return true
     */
     boolean tagOfInterest(int tag, int offset, FileInputStream tagInput){
-        int valueOffset;
+        int v;
     	switch(tag){
     		case 0x0001: 
 				if(debug){
     				System.out.println("Gps Latitude Ref");
     			}
-                valueOffset = parseIFE(tagInput); //GpsLatitudeRef
-                latRef = parseGpsLatLongRef(valueOffset);
+                v = parseIFE(tagInput); //GpsLatitudeRef
+                latRef = parseGpsLatLongRef(v);
     			return true;
 
    			case 0x0002: 
    				if(debug){
     				System.out.println("Gps Latitude");
     			}
-   				valueOffset = parseIFE(tagInput); //GpsLatitude
-                latitude = latRef*parseGpsLatLong(valueOffset);
+   				v = parseIFE(tagInput); //GpsLatitude
+                latitude = latRef*parseGpsLatLong(v);
                 if(debug){
                     System.out.println("Latitude: "+latitude);
                 }
@@ -262,16 +256,16 @@ public class Challenge3 {
     			if(debug){
     				System.out.println("Gps Longitude Ref");
     			}
-    			valueOffset = parseIFE(tagInput); //GpsLongitudeRef
-                longRef = parseGpsLatLongRef(valueOffset);
+    			v = parseIFE(tagInput); //GpsLongitudeRef
+                longRef = parseGpsLatLongRef(v);
     			return true;
 
     		case 0x0004: 
     			if(debug){
     				System.out.println("Gps Longitude");
     			}
-    			valueOffset = parseIFE(tagInput); //GpsLongitude
-                longitude = longRef*parseGpsLatLong(valueOffset);
+    			v = parseIFE(tagInput); //GpsLongitude
+                longitude = longRef*parseGpsLatLong(v);
                 if(debug){
                     System.out.println("Longitude: "+longitude);
                 }
@@ -281,8 +275,8 @@ public class Challenge3 {
    				if(debug){
     				System.out.println("Gps IFD");
     			}
-   				valueOffset = parseIFE(tagInput); //GpsIFD
-                parseIFD(valueOffset);
+   				v = parseIFE(tagInput); //GpsIFD
+                parseIFD(v);
     			return true;
 
    			default:
@@ -344,6 +338,7 @@ public class Challenge3 {
 	void parseBin(FileInputStream input) throws Exception{
 		int ifdOffset = parseFileHeader(input);
 		parseIFD(ifdOffset);
+        System.out.printf("This image was taken at: (%f,%f)\n",latitude,longitude);
 	}
 
 	public static void main(String[] args) throws Exception{
