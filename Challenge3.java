@@ -9,7 +9,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.Exception;
 import java.io.StringReader;
-import java.lang.Byte;
+import java.util.Scanner;
 
 public class Challenge3 {
 
@@ -25,12 +25,15 @@ public class Challenge3 {
     /*
     * Constructor
     */
-    Challenge3() throws Exception{
+    Challenge3(String fn) throws Exception{
         try{
-            filename = "challenge03.bin";
+            filename = fn;
             FileInputStream input = new FileInputStream(filename);
             parseBin(input);
             input.close();
+        }
+        catch (FileNotFoundException e){
+            System.out.println("I'm sorry, but your filename is invalid!");
         }
         catch (IOException e) {
             System.out.println("I/O Problem!");
@@ -344,7 +347,16 @@ public class Challenge3 {
 	}
 
 	public static void main(String[] args) throws Exception{
-		Challenge3 tiffParser = new Challenge3();
+		Challenge3 tiffParser;
+        try{
+            tiffParser = new Challenge3(args[0]);
+        }
+        catch(ArrayIndexOutOfBoundsException e){
+            Scanner inputFilename = new Scanner(System.in);
+            System.out.print("Please enter a filename: ");
+            tiffParser = new Challenge3(inputFilename.next());
+            inputFilename.close();
+        }
     }
 
 }
