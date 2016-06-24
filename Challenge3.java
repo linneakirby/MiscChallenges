@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.lang.Exception;
 import java.io.StringReader;
 import java.util.Scanner;
+import java.util.HashMap;
 
 public class Challenge3 {
 
@@ -17,19 +18,26 @@ public class Challenge3 {
 	private Boolean bigEndian = false;
     private String filename;
 
+    private HashMap<String, Double> info;
+
     private int latRef = 1;
     private int longRef = 1;
+    private int altitudeRef = 1;
     private double latitude = 0;
     private double longitude = 0;
+    private double altitude = 0;
 
     /*
     * Constructor
     */
     Challenge3(String fn) throws Exception{
         try{
+            info = new HashMap<String, Double>();
+
             filename = fn;
             FileInputStream input = new FileInputStream(filename);
             parseBin(input);
+            printInfo();
             input.close();
         }
         catch (FileNotFoundException e){
@@ -137,7 +145,9 @@ public class Challenge3 {
     * parseIFE
     * Parses and ImageFileEntry
     */
-    int parseIFE(FileInputStream ifeInput){
+    int[] parseIFE(FileInputStream ifeInput){
+        int[] offsetCount = new int[2];
+
 	    //Bytes 2-3 - field Type
         int b1 = nextByte(ifeInput);
         int b2 = nextByte(ifeInput);
@@ -151,10 +161,10 @@ public class Challenge3 {
         int b3 = nextByte(ifeInput);
         int b4 = nextByte(ifeInput);
 
-        int count = getValue(b1, b2, b3, b4);
+        offsetCount[1] = getValue(b1, b2, b3, b4);
 
         if(debug){
-            System.out.println("Count: "+Integer.toHexString(count));
+            System.out.println("Count: "+Integer.toHexString(offsetCount[1]));
         }
 
         //Bytes 8-11 - value offset (in bytes) of the Value for the field
@@ -162,25 +172,25 @@ public class Challenge3 {
         b2 = nextByte(ifeInput);
         b3 = nextByte(ifeInput);
         b4 = nextByte(ifeInput);
-        int valueOffset = getValue(b1, b2, b3, b4);
+        offsetCount[0] = getValue(b1, b2, b3, b4);
 
         if(debug){
             System.out.println("b1: "+b1+"\nb2: "+b2+"\nb3: "+b3+"\nb4: "+b4);
-            System.out.println("Value offset: "+Integer.toHexString(valueOffset));
+            System.out.println("Value offset: "+Integer.toHexString(offsetCount[0]));
         }
 
-        return valueOffset;
+        return offsetCount;
     }
 
-    double parseGpsLatLong(int valueOffset){
+    float[] parseFieldType5(int[] offsetCount){
+        float[] dms = new float[offsetCount[1]];
+
         try{
-        FileInputStream latLongInput = new FileInputStream(filename);
+            FileInputStream latLongInput = new FileInputStream(filename);
             //skip to offset of GPS Latitude/Longitude
-            skip(valueOffset, latLongInput);
+            skip(offsetCount[0], latLongInput);
 
-            float[] dms = new float[3];
-
-            for(int i=0; i<3; i++){
+            for(int i=0; i<offsetCount[1]; i++){
                 int[] numeratorValues = {nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput), nextByte(latLongInput)};
                 float numerator = (float)getValue(numeratorValues[0], numeratorValues[1], numeratorValues[2], numeratorValues[3]);
 
@@ -192,7 +202,7 @@ public class Challenge3 {
 
             if(debug){
                 System.out.print("Degrees/Minutes/Seconds: ");
-                for(int j=0; j<3; j++){
+                for(int j=0; j<offsetCount[1]; j++){
                     System.out.print(dms[j]+" ");
                 }
                 System.out.println();
@@ -200,22 +210,22 @@ public class Challenge3 {
 
             latLongInput.close();
 
-            return dms[0] + dms[1]/60.0 + dms[2]/3600.0;
+            return dms;
         }
         catch (IOException e) {
             System.out.println("I/O Problem!");
             e.printStackTrace();
         }
 
-        return -1;
+        return dms;
     }
 
     /*
-    * parseGpsLatLongRef
+    * parseFieldType2
     * Parses the 7-bit, null-terminated ASCII value corresponding to a Latitude or Longitude Ref
     */
-    int parseGpsLatLongRef(int value){
-        value = value >>> 24;
+    int parseFieldType2(int[] valueCount){
+        int value = valueCount[0] >>> 24;
         if(debug){
             System.out.println("Latitude/Longitude Ref: "+((char)value));
         }
@@ -226,19 +236,23 @@ public class Challenge3 {
         return -1;
     }
 
+    int parseFieldType1(int[] valueCount){
+        return valueCount[0];
+    }
+
     /*
     * tagOfInterest
     * checks to see if the tag contains GPS information; if so, calls parseIFE() and return true
     */
     boolean tagOfInterest(int tag, int offset, FileInputStream tagInput){
-        int v;
+        int[] v;
     	switch(tag){
     		case 0x0001: 
 				if(debug){
     				System.out.println("Gps Latitude Ref");
     			}
                 v = parseIFE(tagInput); //GpsLatitudeRef
-                latRef = parseGpsLatLongRef(v);
+                info.put("Latitude Ref", (double)parseFieldType2(v));
     			return true;
 
    			case 0x0002: 
@@ -246,9 +260,11 @@ public class Challenge3 {
     				System.out.println("Gps Latitude");
     			}
    				v = parseIFE(tagInput); //GpsLatitude
-                latitude = latRef*parseGpsLatLong(v);
+                float[] latDms = parseFieldType5(v);
+                double latitude = latDms[0] + latDms[1]/60.0 + latDms[2]/3600.0;
+                info.put("Latitude", info.get("Latitude Ref")*latitude);
                 if(debug){
-                    System.out.println("Latitude: "+latitude);
+                    System.out.println("Latitude: "+info.get("Latitude"));
                 }
     			return true;
 
@@ -257,7 +273,7 @@ public class Challenge3 {
     				System.out.println("Gps Longitude Ref");
     			}
     			v = parseIFE(tagInput); //GpsLongitudeRef
-                longRef = parseGpsLatLongRef(v);
+                info.put("Longitude Ref", (double)parseFieldType2(v));
     			return true;
 
     		case 0x0004: 
@@ -265,18 +281,53 @@ public class Challenge3 {
     				System.out.println("Gps Longitude");
     			}
     			v = parseIFE(tagInput); //GpsLongitude
-                longitude = longRef*parseGpsLatLong(v);
+                float[] longDms = parseFieldType5(v);
+                double longitude = longDms[0] + longDms[1]/60.0 + longDms[2]/3600.0;
+                info.put("Longitude", info.get("Longitude Ref")*longitude);
                 if(debug){
-                    System.out.println("Longitude: "+longitude);
+                    System.out.println("Longitude: "+info.get("Longitude"));
                 }
     			return true;
+
+            case 0x0005:
+                if(debug){
+                    System.out.println("Gps Altitude Ref");
+                }
+                v = parseIFE(tagInput); //GpsAltitudeRef
+                info.put("Altitude Ref", (double)parseFieldType1(v));
+                return true;
+
+            case 0x0006:
+                if(debug){
+                    System.out.println("Gps Altitude");
+                }
+                v = parseIFE(tagInput); //GpsAltitude
+                float[] alt = parseFieldType5(v);
+                info.put("Altitude", info.get("Altitude Ref")+alt[0]);
+                if(debug){
+                    System.out.println("Altitude: "+info.get("Altitude"));
+                }
+                return true;
+
+            case 0x0007:
+                if(debug){
+                    System.out.println("Gps Time");
+                }
+                v = parseIFE(tagInput); //GpsAltitude
+                float[] timeDms = parseFieldType5(v);
+                double time = timeDms[0] + timeDms[1]/60.0 + timeDms[2]/3600.0;
+                info.put("Gps Time", time);
+                if(debug){
+                    System.out.println("Gps Time: "+info.get("Gps Time"));
+                }
+                return true;
 
    			case 0x8825: 
    				if(debug){
     				System.out.println("Gps IFD");
     			}
    				v = parseIFE(tagInput); //GpsIFD
-                parseIFD(v);
+                parseIFD(v[0]);
     			return true;
 
    			default:
@@ -338,8 +389,22 @@ public class Challenge3 {
 	void parseBin(FileInputStream input) throws Exception{
 		int ifdOffset = parseFileHeader(input);
 		parseIFD(ifdOffset);
-        System.out.printf("This image was taken at: (%f,%f)\n",latitude,longitude);
+
 	}
+
+    void printInfo(){
+        /*for(String key:info.keySet()){
+            System.out.println(key+": "+info.get(key));
+        }*/
+        System.out.println("GPS INFORMATION");
+        System.out.printf("Coordinates: (%f, %f)\n",info.get("Latitude"),info.get("Longitude"));
+        System.out.printf("Altitude: %.2f m\n", info.get("Altitude"));
+        double gpsTime = info.get("Gps Time");
+        int h = (int)gpsTime/1;
+        double m = gpsTime%1*60;
+        double s = m%1*60;
+        System.out.printf("Gps Time: %02d:%02d:%02d\n", h, (int)m, (int)s);
+    }
 
 	public static void main(String[] args) throws Exception{
 		Challenge3 tiffParser;
