@@ -1,10 +1,10 @@
 CC = gcc
 CFLAGS = -O0 -g -std=c99 -pedantic -Wall -Wextra
 
-all: challenge1
+all: lcg
 
-challenge1: challenge1.c
-	$(CC) $(CFLAGS) -o challenge1 challenge1.c
+challenge1: lcg.c
+	$(CC) $(CFLAGS) -o lcg lcg.c
 
 clean:
-	rm -f *.o challenge1
+	rm -f *.o lcg
