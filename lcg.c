@@ -1,7 +1,6 @@
 /*Linnea Kirby
 20 June 2016
-
-Solution for Cipher Tech Solutions Challenge 1*/
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
