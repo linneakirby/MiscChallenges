@@ -1,7 +1,5 @@
 /* Linnea Kirby
  * 21 June 2016
- * 
- * Solution for Cipher Tech Solutions Challenge 3
  */
 
 import java.io.FileInputStream;
@@ -12,7 +10,7 @@ import java.io.StringReader;
 import java.util.Scanner;
 import java.util.HashMap;
 
-public class Challenge3 {
+public class TIFFParser {
 
 	private Boolean debug = false; //make this true to see intermediary steps
 
@@ -24,7 +22,7 @@ public class Challenge3 {
     /*
     * Constructor
     */
-    Challenge3(String fn) throws Exception{
+    TIFFParser(String fn) throws Exception{
         try{
             info = new HashMap<String, Double>();
 
@@ -537,14 +535,14 @@ public class Challenge3 {
     }
 
 	public static void main(String[] args) throws Exception{
-		Challenge3 tiffParser;
+		TIFFParser tiffParser;
         try{
-            tiffParser = new Challenge3(args[0]);
+            tiffParser = new TIFFParser(args[0]);
         }
         catch(ArrayIndexOutOfBoundsException e){
             Scanner inputFilename = new Scanner(System.in);
             System.out.print("Please enter a filename: ");
-            tiffParser = new Challenge3(inputFilename.next());
+            tiffParser = new TIFFParser(inputFilename.next());
             inputFilename.close();
         }
     }
