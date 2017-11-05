@@ -491,16 +491,17 @@ public class TiffParser {
   }
 
   public static void main(String[] args) throws Exception {
-    TiffParser tiffParser;
-    try{
-      tiffParser = new TiffParser(args[0]);
+    String filename;
+    if(args.length == 1){
+      filename = args[0];
     }
-    catch(ArrayIndexOutOfBoundsException e){
+    else{
       Scanner inputFilename = new Scanner(System.in);
       System.out.print("Please enter a filename: ");
-      tiffParser = new TiffParser(inputFilename.next());
+      filename = inputFilename.next();
       inputFilename.close();
     }
+    TiffParser tiffParser = new TiffParser(filename);
   }
 
 }
